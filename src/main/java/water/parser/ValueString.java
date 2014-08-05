@@ -1,7 +1,6 @@
 package water.parser;
 
-import java.util.ArrayList;
-
+import java.util.Arrays;
 import water.Iced;
 
 public final class ValueString extends Iced implements Comparable<ValueString> {
@@ -9,23 +8,13 @@ public final class ValueString extends Iced implements Comparable<ValueString> {
    private int _off;
    private int _len;
 
-   public ValueString() {}
-
-   public ValueString(byte [] buf, int off, int len){
-     _buf = buf;
-     _off = off;
-     _len = len;
-   }
-
-   public ValueString(String from) {
-     _buf = from.getBytes();
-     _off = 0;
-     _len = get_buf().length;
-   }
-
-   public ValueString(byte [] buf){
-     this(buf,0,buf.length);
-   }
+   ValueString( byte [] buf, int off, int len) { _buf = buf;  _off = off;  _len = len; }
+   ValueString( byte [] buf ) { this(buf,0,buf.length); }
+   ValueString( String from ) { this(from.getBytes()); }
+   // Cloning constructing used during collecting unique enums
+   ValueString( ValueString from ) { this(Arrays.copyOfRange(from._buf,from._off,from._off+from._len)); }
+   // Used to make a temp recycling ValueString in hot loops
+   public ValueString() { }
 
    @Override public int compareTo( ValueString o ) {
      int len = Math.min(_len,o._len);
@@ -36,8 +25,7 @@ public final class ValueString extends Iced implements Comparable<ValueString> {
      return _len - o._len;
    }
 
-   @Override
-   public int hashCode(){
+   @Override public int hashCode(){
      int hash = 0;
      int n = get_off() + get_length();
      for (int i = get_off(); i < n; ++i)
@@ -74,10 +62,11 @@ public final class ValueString extends Iced implements Comparable<ValueString> {
     return ss;
   }
 
-  void set(byte [] buf, int off, int len){
+  public ValueString set(byte [] buf, int off, int len) {
     _buf = buf;
     _off = off;
     _len = len;
+    return this;                // Flow coding
   }
 
   public ValueString setTo(String what) {

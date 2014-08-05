@@ -19,7 +19,7 @@ import water.*;
 import water.api.DocGen;
 import water.api.DocGen.FieldDoc;
 import water.nbhm.UtilUnsafe;
-import water.fvec.ParseDataset2.Compression;
+import water.parser.ZipUtil;
 
 public class Utils {
   /** Returns the index of the largest value in the array.
@@ -666,16 +666,16 @@ public class Utils {
     } catch(Exception e){return null;}
   }
 
-  public static Compression guessCompressionMethod(byte [] bits){
+  public static ZipUtil.Compression guessCompressionMethod(byte [] bits){
     // Look for ZIP magic
     if( bits.length > ZipFile.LOCHDR && UDP.get4(bits,0) == ZipFile.LOCSIG )
-      return Compression.ZIP;
+      return ZipUtil.Compression.ZIP;
     if( bits.length > 2 && UDP.get2u(bits,0) == GZIPInputStream.GZIP_MAGIC )
-      return Compression.GZIP;
-    return Compression.NONE;
+      return ZipUtil.Compression.GZIP;
+    return ZipUtil.Compression.NONE;
   }
 
-  public static byte [] unzipBytes(byte [] bs, Compression cmp) {
+  public static byte [] unzipBytes(byte [] bs, ZipUtil.Compression cmp) {
     InputStream is = null;
     int off = 0;
     try {

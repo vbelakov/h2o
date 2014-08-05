@@ -12,7 +12,7 @@ import water.deploy.NodeVM;
 import water.fvec.FVecTest;
 import water.fvec.Frame;
 import water.fvec.NFSFileVec;
-import water.fvec.ParseDataset2;
+import water.parser.ParseDataset2;
 
 import java.io.File;
 import java.util.concurrent.ExecutionException;

@@ -5,7 +5,7 @@ import org.junit.Test;
 import water.*;
 import water.fvec.Frame;
 import water.fvec.NFSFileVec;
-import water.fvec.ParseDataset2;
+import water.parser.ParseDataset2;
 import water.fvec.Vec;
 import water.util.Log;
 import water.util.MRUtils;

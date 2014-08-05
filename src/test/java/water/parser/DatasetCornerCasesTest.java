@@ -7,7 +7,7 @@ import org.junit.Test;
 
 import water.*;
 import water.fvec.Frame;
-import water.fvec.ParseDataset2;
+import water.parser.ParseDataset2;
 import water.api.Constants.Extensions;
 
 public class DatasetCornerCasesTest extends TestUtil {

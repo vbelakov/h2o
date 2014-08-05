@@ -6,6 +6,7 @@ import java.util.Date;
 import java.util.concurrent.TimeUnit;
 import water.*;
 import water.util.Log;
+import water.util.PrettyPrint;
 import water.util.TimelineSnapshot;
 
 public class IOStatus extends Request {

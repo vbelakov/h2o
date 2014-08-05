@@ -5,7 +5,7 @@ import org.junit.Test;
 import water.api.UnlockKeys;
 import water.fvec.Frame;
 import water.fvec.NFSFileVec;
-import water.fvec.ParseDataset2;
+import water.parser.ParseDataset2;
 import water.util.Log;
 
 public class UnlockTest extends TestUtil {

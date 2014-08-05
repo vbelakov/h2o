@@ -11,6 +11,7 @@ import hex.singlenoderf.SpeeDRFModelView;
 import water.*;
 import water.api.*;
 import water.util.Utils;
+import water.util.PrettyPrint;
 
 import java.util.ArrayList;
 import java.util.Collections;

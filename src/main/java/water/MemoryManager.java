@@ -11,6 +11,7 @@ import jsr166y.ForkJoinPool;
 import jsr166y.ForkJoinPool.ManagedBlocker;
 import water.util.Log;
 import water.util.Log.Tag.Sys;
+import water.util.PrettyPrint;
 
 /**
  * Manages memory assigned to key/value pairs. All byte arrays used in

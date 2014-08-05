@@ -11,7 +11,7 @@ import water.TestUtil;
 import water.UKV;
 import water.fvec.Frame;
 import water.fvec.NFSFileVec;
-import water.fvec.ParseDataset2;
+import water.parser.ParseDataset2;
 import water.util.Log;
 
 public class DeepLearningSpiralsTest extends TestUtil {

@@ -2,6 +2,7 @@ package water;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import water.util.PrettyPrint;
 /**
  * Simple Timer class.
  **/

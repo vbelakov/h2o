@@ -1,7 +1,6 @@
-package water.fvec;
+package water.parser;
 
 import org.joda.time.DateTime;
-import water.parser.ValueString;
 
 public abstract class ParseTime {
   // Deduce if we are looking at a Date/Time value, or not.
@@ -12,13 +11,13 @@ public abstract class ParseTime {
   // ArrayIndexOutOfBoundsException... and the Piece de resistance: a
   // ClassCastException deep in the SimpleDateFormat code:
   // "sun.util.calendar.Gregorian$Date cannot be cast to sun.util.calendar.JulianCalendar$Date"
-  public static int digit( int x, int c ) {
+  private static int digit( int x, int c ) {
     if( x < 0 || c < '0' || c > '9' ) return -1;
     return x*10+(c-'0');
   }
 
   // So I just brutally parse "dd-MMM-yy".
-  public static final byte MMS[][][] = new byte[][][] {
+  private static final byte MMS[][][] = new byte[][][] {
     {"jan".getBytes(),"january"  .getBytes()},
     {"feb".getBytes(),"february" .getBytes()},
     {"mar".getBytes(),"march"    .getBytes()},
@@ -39,16 +38,16 @@ public abstract class ParseTime {
   // Returns:
   //  - not a time parse: Long.MIN_VALUE 
   //  - time parse via pattern X: time in msecs since Jan 1, 1970, shifted left by 1 byte, OR'd with X
-  public static long encodeTimePat(long tcode, int tpat ) { return (tcode<<8)|tpat; }
-  public static long decodeTime(long tcode ) { return tcode>>8; }
-  public static int  decodePat (long tcode ) { return ((int)tcode&0xFF); }
+  static long encodeTimePat(long tcode, int tpat ) { return (tcode<<8)|tpat; }
+  static long decodeTime(long tcode ) { return tcode>>8; }
+  static int  decodePat (long tcode ) { return ((int)tcode&0xFF); }
   public static long attemptTimeParse( ValueString str ) {
     try {
       long t0 = attemptTimeParse_01(str); // "yyyy-MM-dd" and that plus " HH:mm:ss.SSS"
       if( t0 != Long.MIN_VALUE ) return t0;
       long t2 = attemptTimeParse_2 (str); // "dd-MMM-yy"
       if( t2 != Long.MIN_VALUE ) return t2;
-    } catch( org.joda.time.IllegalFieldValueException ignore ) { }
+    } catch( org.joda.time.IllegalFieldValueException _ ) { }
     return Long.MIN_VALUE;
   }
   // So I just brutally parse "yyyy-MM-dd HH:mm:ss.SSS"
@@ -114,14 +113,15 @@ public abstract class ParseTime {
     byte[]mm=null;
     OUTER: for( ; MM<MMS.length; MM++ ) {
       byte[][] mms = MMS[MM];
-      INNER: for( int k=0; k<mms.length; k++ ) {
-        mm = mms[k];
-        if( mm == null ) continue;
-        if( i+mm.length >= end ) continue INNER;
-        for( int j=0; j<mm.length; j++ )
-          if( mm[j] != Character.toLowerCase(buf[i+j]) )
+      INNER:
+      for (byte[] mm1 : mms) {
+        mm = mm1;
+        if (mm == null) continue;
+        if (i + mm.length >= end) continue INNER;
+        for (int j = 0; j < mm.length; j++)
+          if (mm[j] != Character.toLowerCase(buf[i + j]))
             continue INNER;
-        if( buf[i+mm.length] == '-' ) break OUTER;
+        if (buf[i + mm.length] == '-') break OUTER;
       }
     }
     if( MM == MMS.length ) return Long.MIN_VALUE; // No matching month
@@ -141,7 +141,7 @@ public abstract class ParseTime {
     return encodeTimePat(new DateTime(yy,MM,dd,0,0,0).getMillis(),2);
   }
 
-
+  // --------------------------------
   // Parse XXXXXXXX-XXXX-XXXX and return an arbitrary long, or set str.off==-1
   // (and return Long.MIN_VALUE but this is a valid long return value).
   public static long attemptUUIDParse0( ValueString str ) {

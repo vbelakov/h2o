@@ -1,69 +1,43 @@
 package water.parser;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.util.ArrayList;
+import java.io.*;
 import java.util.Arrays;
-import water.Iced;
-import water.PrettyPrint;
+import water.util.PrettyPrint;
 
-/**
- * Parser for SVM light format.
- * @author tomasnykodym
- *
- */
-public class SVMLightParser extends CustomParser{
-  private static final byte SKIP_LINE = 0;
-  private static final byte EXPECT_COND_LF = 1;
-  private static final byte EOL = 2;
-  private static final byte TOKEN = 3;
-  private static final byte SKIP_TOKEN = 4;
-  private static final byte NUMBER = 5;
-  private static final byte NUMBER_FRACTION = 6;
-  private static final byte NUMBER_EXP = 7;
-  private static final byte INVALID_NUMBER = 8;
-  private static final byte NUMBER_EXP_START = 9;
-  private static final byte NUMBER_END = 10;
-  private static final byte WHITESPACE_BEFORE_TOKEN = 11;
-  private static final byte POSSIBLE_EMPTY_LINE = 12;
-  private static final byte QID0 = 13;
-  private static final byte QID1 = 14;
+class SVMLightParser extends Parser {
+  private static final byte SKIP_TOKEN = 21;
+  private static final byte INVALID_NUMBER = 22;
+  private static final byte QID0 = 23;
+  private static final byte QID1 = 24;
 
   // line global states
   private static final int TGT = 1;
   private static final int COL = 2;
   private static final int VAL = 3;
 
-  private static final long LARGEST_DIGIT_NUMBER = 1000000000000000000L;
+  SVMLightParser( ParseSetup ps ) { super(ps); }
 
-  final static char DECIMAL_SEP = '.';
-
-  public SVMLightParser(ParserSetup setup) {super(setup);}
-  @Override
-  public SVMLightParser clone(){return new SVMLightParser(_setup);}
-  @Override
-  public boolean parallelParseSupported(){return true;}
-
-  /**
-   * Try to parse the bytes as svm light format, return SVMParser instance if the input is in svm light format, null otherwise.
-   * @param bytes
-   * @return SVMLightPArser instance or null
+  /** Try to parse the bytes as svm light format, return a ParseSetupHandler with type 
+   *  SVMLight if the input is in svm light format, throw an exception otherwise.
    */
-  public static PSetupGuess guessSetup(byte [] bytes){
+  public static ParseSetup guessSetup(byte [] bytes) {
     // find the last eof
     int i = bytes.length-1;
-    while(i > 0 && bytes[i] != '\n')--i;
+    while(i > 0 && bytes[i] != '\n') --i;
     assert i >= 0;
     InputStream is = new ByteArrayInputStream(Arrays.copyOf(bytes,i));
-    SVMLightParser p = new SVMLightParser(new ParserSetup(ParserType.SVMLight, CsvParser.AUTO_SEP, false));
-    InspectDataOut dout = new InspectDataOut();
-    try{p.streamParse(is, dout);}catch(Exception e){throw new RuntimeException(e);}
-    return new PSetupGuess(new ParserSetup(ParserType.SVMLight, CsvParser.AUTO_SEP, dout._ncols,false,null,false),dout._nlines,dout._invalidLines,dout.data(),dout._ncols > 0 && dout._nlines > 0 && dout._nlines > dout._invalidLines,dout.errors());
+    SVMLightParser p = new SVMLightParser(new ParseSetup(true, 0, 0, null, ParserType.SVMLight, ParseSetup.AUTO_SEP, -1, false, null,null,null,0, null));
+    InspectDataOut2 dout = new InspectDataOut2();
+    try{ p.streamParse(is, dout); } catch(IOException e) { throw new RuntimeException(e); }
+    return new ParseSetup(dout._ncols > 0 && dout._nlines > 0 && dout._nlines > dout._invalidLines,
+                                 dout._invalidLines, 0, dout.errors(), ParserType.SVMLight, ParseSetup.AUTO_SEP, dout._ncols,
+                                 false,null,null,dout._data,-1/*never a header on SVM light*/, null);
   }
-  @Override
-  public boolean isCompatible(CustomParser p){return p instanceof SVMLightParser;}
+
+  final boolean isWhitespace(byte c){return c == ' '  || c == '\t';}
+
   @SuppressWarnings("fallthrough")
-  @Override public final DataOut parallelParse(int cidx, final CustomParser.DataIn din, final CustomParser.DataOut dout) {
+  @Override public final DataOut parallelParse(int cidx, final Parser.DataIn din, final Parser.DataOut dout) {
       ValueString _str = new ValueString();
       byte[] bits = din.getChunkData(cidx);
       if( bits == null ) return dout;
@@ -94,9 +68,6 @@ public class SVMLightParser extends CustomParser{
           c = bits[offset];
         }
       }
-      //dout.newLine();
-      int linestart = 0;
-//      String linePrefix = "";
   MAIN_LOOP:
       while (true) {
   NEXT_CHAR:
@@ -104,12 +75,11 @@ public class SVMLightParser extends CustomParser{
           // ---------------------------------------------------------------------
           case SKIP_LINE:
             if (!isEOL(c))
-              break NEXT_CHAR;
+              break;
             // fall through
           case EOL:
             if (colIdx != 0) {
               colIdx = 0;
-              linestart = offset+1;
               if(lstate != SKIP_LINE)
                 dout.newLine();
             }
@@ -117,13 +87,12 @@ public class SVMLightParser extends CustomParser{
               break MAIN_LOOP; // second chunk only does the first row
             lstate = (c == CHAR_CR) ? EXPECT_COND_LF : POSSIBLE_EMPTY_LINE;
             gstate = TGT;
-            linestart = offset;
-            break NEXT_CHAR;
+            break;
           // ---------------------------------------------------------------------
           case EXPECT_COND_LF:
             lstate = POSSIBLE_EMPTY_LINE;
             if (c == CHAR_LF)
-              break NEXT_CHAR;
+              break;
             continue MAIN_LOOP;
           // ---------------------------------------------------------------------
 
@@ -134,21 +103,21 @@ public class SVMLightParser extends CustomParser{
             if (isEOL(c)) {
               if (c == CHAR_CR)
                 lstate = EXPECT_COND_LF;
-              break NEXT_CHAR;
+              break;
             }
             lstate = WHITESPACE_BEFORE_TOKEN;
             // fallthrough to WHITESPACE_BEFORE_TOKEN
           // ---------------------------------------------------------------------
           case WHITESPACE_BEFORE_TOKEN:
             if (isWhitespace(c))
-                break NEXT_CHAR;
+                break;
             if (isEOL(c)){
               lstate = EOL;
               continue MAIN_LOOP;
             }
           // fallthrough to TOKEN
           case TOKEN:
-            if (((c >= '0') && (c <= '9')) || (c == '-') || (c == DECIMAL_SEP) || (c == '+')) {
+            if (((c >= '0') && (c <= '9')) || (c == '-') || (c == CHAR_DECIMAL_SEP) || (c == '+')) {
               lstate = NUMBER;
               number = 0;
               fractionDigits = 0;
@@ -156,10 +125,10 @@ public class SVMLightParser extends CustomParser{
 
               if (c == '-') {
                 exp = -1;
-                break NEXT_CHAR;
+                break;
               } else if(c == '+'){
                 exp = 1;
-                break NEXT_CHAR;
+                break;
               } else {
                 exp = 1;
               }
@@ -167,7 +136,6 @@ public class SVMLightParser extends CustomParser{
             } else if(c == 'q'){
               lstate = QID0;
             } else { // failed, skip the line
-              // TODO
               dout.invalidLine("Unexpected character, expected number or qid, got '" + new String(Arrays.copyOfRange(bits, offset,Math.min(bits.length,offset+5))) + "...'");
               lstate = SKIP_LINE;
               continue MAIN_LOOP;
@@ -179,16 +147,16 @@ public class SVMLightParser extends CustomParser{
               number = (number*10)+(c-'0');
               if (number >= LARGEST_DIGIT_NUMBER)
                 lstate = INVALID_NUMBER;
-              break NEXT_CHAR;
-            } else if (c == DECIMAL_SEP) {
+              break;
+            } else if (c == CHAR_DECIMAL_SEP) {
               lstate = NUMBER_FRACTION;
               fractionDigits = offset;
               decimal = true;
-              break NEXT_CHAR;
+              break;
             } else if ((c == 'e') || (c == 'E')) {
               lstate = NUMBER_EXP_START;
               sgn_exp = 1;
-              break NEXT_CHAR;
+              break;
             }
             if (exp == -1) {
               number = -number;
@@ -208,7 +176,7 @@ public class SVMLightParser extends CustomParser{
                     // wrong col Idx, just skip the token and try to continue
                     // col idx is either too small (according to spec, cols must come in strictly increasing order)
                     // or too small (col ids currently must fit into int)
-                    String err = "";
+                    String err;
                     if(number <= colIdx)
                       err = "Columns come in non-increasing sequence. Got " + number + " after " + colIdx + ".";
                     else if(exp != 0)
@@ -221,7 +189,6 @@ public class SVMLightParser extends CustomParser{
                 } else { // we're probably out of sync, skip the rest of the line
                   dout.invalidLine("unexpected character after column id: " + c);
                   lstate = SKIP_LINE;
-                  // TODO output error
                 }
                 break NEXT_CHAR;
               case TGT:
@@ -235,7 +202,7 @@ public class SVMLightParser extends CustomParser{
           case NUMBER_FRACTION:
             if(c == '0'){
               ++zeros;
-              break NEXT_CHAR;
+              break;
             }
             if ((c > '0') && (c <= '9')) {
               if (number < LARGEST_DIGIT_NUMBER) {
@@ -245,14 +212,14 @@ public class SVMLightParser extends CustomParser{
                 lstate = SKIP_LINE;
               }
               zeros = 0;
-              break NEXT_CHAR;
+              break;
             } else if ((c == 'e') || (c == 'E')) {
               if (decimal)
                 fractionDigits = offset - zeros - 1 - fractionDigits;
               lstate = NUMBER_EXP_START;
               sgn_exp = 1;
               zeros = 0;
-              break NEXT_CHAR;
+              break;
             }
             lstate = NUMBER_END;
             if (decimal)
@@ -271,9 +238,9 @@ public class SVMLightParser extends CustomParser{
             exp = 0;
             if (c == '-') {
               sgn_exp *= -1;
-              break NEXT_CHAR;
+              break;
             } else if (c == '+'){
-              break NEXT_CHAR;
+              break;
             }
             if ((c < '0') || (c > '9')){
               lstate = INVALID_NUMBER;
@@ -284,7 +251,7 @@ public class SVMLightParser extends CustomParser{
           case NUMBER_EXP:
             if ((c >= '0') && (c <= '9')) {
               exp = (exp*10)+(c-'0');
-              break NEXT_CHAR;
+              break;
             }
             exp *= sgn_exp;
             lstate = NUMBER_END;
@@ -303,19 +270,19 @@ public class SVMLightParser extends CustomParser{
           case QID0:
             if(c == 'i'){
               lstate = QID1;
-              break NEXT_CHAR;
+              break;
             } else {
               lstate = SKIP_TOKEN;
-              break NEXT_CHAR;
+              break;
             }
           case QID1:
             if(c == 'd'){
               lstate = SKIP_TOKEN; // skip qid for now
-              break NEXT_CHAR;
+              break;
             } else {
               // TODO report an error
-              lstate = SKIP_TOKEN;;
-              break NEXT_CHAR;
+              lstate = SKIP_TOKEN;
+              break;
             }
             // fall through
           case SKIP_TOKEN:
@@ -323,7 +290,7 @@ public class SVMLightParser extends CustomParser{
               lstate = EOL;
             else if(isWhitespace(c))
               lstate = WHITESPACE_BEFORE_TOKEN;
-            break NEXT_CHAR;
+            break;
           default:
             assert (false) : " We have wrong state "+lstate;
         } // end NEXT_CHAR
@@ -339,7 +306,6 @@ public class SVMLightParser extends CustomParser{
           if( firstChunk && bits1 == null ){
             bits1 = din.getChunkData(cidx+1);
 //            linePrefix = new String(Arrays.copyOfRange(bits, linestart, bits.length));
-            linestart = 0;
           }
           // if we can't get further we might have been the last one and we must
           // commit the latest guy if we had one.
@@ -347,9 +313,10 @@ public class SVMLightParser extends CustomParser{
             // If we are mid-parse of something, act like we saw a LF to end the
             // current token.
             if ((lstate != EXPECT_COND_LF) && (lstate != POSSIBLE_EMPTY_LINE)) {
-              c = CHAR_LF;  continue MAIN_LOOP;
+              c = CHAR_LF;
+              continue;
             }
-            break MAIN_LOOP;      // Else we are just done
+            break;      // Else we are just done
           }
           // Now parsing in the 2nd chunk.  All offsets relative to the 2nd chunk start.
           firstChunk = false;
@@ -358,60 +325,30 @@ public class SVMLightParser extends CustomParser{
           offset -= bits.length;
           bits = bits1;           // Set main parsing loop bits
           if( bits[0] == CHAR_LF && lstate == EXPECT_COND_LF )
-            break MAIN_LOOP; // when the first character we see is a line end
+            break; // when the first character we see is a line end
         }
         c = bits[offset];
       } // end MAIN_LOOP
       return dout;
   }
-  private static class InspectDataOut extends Iced implements DataOut {
-    public int _nlines;
-    public int _ncols;
-    public int _invalidLines;
-    public final static int MAX_COLS = 100;
-    public final static int MAX_LINES = 10;
-    private String [][] _data = new String[MAX_LINES][MAX_COLS];
-    transient ArrayList<String> _errors = new ArrayList<String>();
-    public InspectDataOut() {
-     for(int i = 0; i < MAX_LINES;++i)
-       Arrays.fill(_data[i],"0");
+
+  // --------------------------------------------------------
+  // Used for previewing datasets.
+  // Fill with zeros not NAs, and grow columns on-demand.
+  private static class InspectDataOut2 extends InspectDataOut {
+    public InspectDataOut2() {
+      for (String[] a_data : _data) Arrays.fill(a_data, "0");
     }
-    public String [][] data(){
-      if(_data.length <= _nlines && _data[0].length <= _ncols)
-        return _data;
-      String [][] res = Arrays.copyOf(_data, Math.min(MAX_LINES, _nlines));
-      for(int i = 0; i < res.length; ++i)
-        res[i] = Arrays.copyOf(_data[i], Math.min(MAX_COLS,_ncols));
-      return (_data = res);
-    }
-    @Override public void setColumnNames(String[] names) {}
-    @Override public void newLine() {
-      ++_nlines;
-    }
-    @Override public boolean isString(int colIdx) {return false;}
+    // Expand columns on-demand
     @Override public void addNumCol(int colIdx, long number, int exp) {
       _ncols = Math.max(_ncols,colIdx);
-      if(colIdx < MAX_COLS && _nlines < MAX_LINES)
+      if(colIdx < MAX_PREVIEW_COLS && _nlines < MAX_PREVIEW_LINES)
         _data[_nlines][colIdx] = Double.toString(number*PrettyPrint.pow10(exp));
     }
     @Override public void addNumCol(int colIdx, double d) {
       _ncols = Math.max(_ncols,colIdx);
-      if(colIdx < MAX_COLS)
+      if(colIdx < MAX_PREVIEW_COLS && _nlines < MAX_PREVIEW_LINES)
         _data[_nlines][colIdx] = Double.toString(d);
     }
-    @Override public void addInvalidCol(int colIdx) {}
-    @Override public void addStrCol(int colIdx, ValueString str) {}
-    @Override public void rollbackLine() {--_nlines;}
-    @Override public void invalidLine(String error) {
-      ++_invalidLines;
-      if(_errors.size() < 10)
-        _errors.add("error at line " + (_nlines +_invalidLines) + ", cause: " + error);
-    }
-    @Override public void invalidValue(int linenum, int colnum) {}
-    public String [] errors(){
-      String [] res = new String[_errors.size()];
-      return _errors.toArray(res);
-    }
-
   }
 }

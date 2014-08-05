@@ -3,6 +3,7 @@ package water.fvec;
 import water.*;
 import water.util.Utils;
 import java.util.Arrays;
+import water.parser.ParseTime;
 
 /**
  * A NEW single distributed vector column.
@@ -16,19 +17,21 @@ import java.util.Arrays;
  * Vec type.  NEW Vectors do NOT support reads!
  */
 public class AppendableVec extends Vec {
-  long _espc[];
+  public long _espc[];
   public static final byte NA     = 1;
   public static final byte ENUM   = 2;
   public static final byte NUMBER = 4;
   public static final byte TIME   = 8;
   public static final byte UUID   =16;
+  public static final byte STRING =32;
   byte [] _chunkTypes;
   long _naCnt;
+  long _enumCnt;
   long _strCnt;
   final long _timCnt[] = new long[ParseTime.TIME_PARSE.length];
   long _totalCnt;
 
-  public AppendableVec( Key key) {
+  public AppendableVec( Key key ) {
     super(key, (long[])null);
     _espc = new long[4];
     _chunkTypes = new byte[4];
@@ -38,7 +41,7 @@ public class AppendableVec extends Vec {
   // A NewVector chunk was "closed" - completed.  Add it's info to the roll-up.
   // This call is made in parallel across all node-local created chunks, but is
   // not called distributed.
-  synchronized void closeChunk( NewChunk chk) {
+  synchronized void closeChunk( NewChunk chk ) {
     final int cidx = chk._cidx;
     while( cidx >= _espc.length ) {
       _espc   = Arrays.copyOf(_espc,_espc.length<<1);
@@ -47,6 +50,7 @@ public class AppendableVec extends Vec {
     _espc[cidx] = chk._len;
     _chunkTypes[cidx] = chk.type();
     _naCnt += chk._naCnt;
+    _enumCnt += chk.enumCnt();
     _strCnt += chk._strCnt;
     for( int i=0; i<_timCnt.length; i++ ) _timCnt[i] += chk._timCnt[i];
     _totalCnt += chk._len;
@@ -55,7 +59,7 @@ public class AppendableVec extends Vec {
   // What kind of data did we find?  NA's?  Strings-only?  Floats or Ints?
   boolean shouldBeEnum() {
     // We declare column to be string/enum only if it does not have ANY numbers in it.
-    return _strCnt > 0 && (_strCnt + _naCnt) == _totalCnt;
+    return _enumCnt > 0 && (_enumCnt + _strCnt + _naCnt) == _totalCnt;
   }
 
   // Class 'reduce' call on new vectors; to combine the roll-up info.
@@ -79,6 +83,7 @@ public class AppendableVec extends Vec {
       _chunkTypes[i] |= t1[i];
     }
     _naCnt += nv._naCnt;
+    _enumCnt += nv._enumCnt;
     _strCnt += nv._strCnt;
     Utils.add(_timCnt,nv._timCnt);
     _totalCnt += nv._totalCnt;
@@ -95,12 +100,13 @@ public class AppendableVec extends Vec {
       nchunk--;
       DKV.remove(chunkKey(nchunk),fs); // remove potential trailing key
     }
-    boolean hasNumber = false, hasEnum = false, hasTime=false, hasUUID=false;
+    boolean hasNumber = false, hasEnum = false, hasTime=false, hasUUID=false, hasString=false;
     for( int i = 0; i < nchunk; ++i ) {
       if( (_chunkTypes[i] & TIME  ) != 0 ) { hasNumber = true; hasTime=true; }
       if( (_chunkTypes[i] & NUMBER) != 0 )   hasNumber = true;
       if( (_chunkTypes[i] & ENUM  ) != 0 )   hasEnum   = true;
       if( (_chunkTypes[i] & UUID  ) != 0 )   hasUUID   = true;
+      if( (_chunkTypes[i] & STRING) != 0 )   hasString = true;
     }
     // number wins, we need to go through the enum chunks and declare them all
     // NAs (chunk is considered enum iff it has only enums + possibly some nas)
@@ -109,9 +115,10 @@ public class AppendableVec extends Vec {
         if(_chunkTypes[i] == ENUM)
           DKV.put(chunkKey(i), new C0DChunk(Double.NaN, (int)_espc[i]),fs);
     }
-    // UUID wins over enum & number
-    if( hasUUID && (hasEnum || hasNumber) ) {
-      hasEnum=hasNumber=false;
+
+    // UUID wins over enum, string & number
+    if( hasUUID && (hasEnum || hasNumber || hasString) ) {
+      hasEnum=hasNumber=hasString=false;
       for(int i = 0; i < nchunk; ++i)
         if((_chunkTypes[i] & UUID)==0)
           DKV.put(chunkKey(i), new C0DChunk(Double.NaN, (int)_espc[i]),fs);
@@ -143,32 +150,21 @@ public class AppendableVec extends Vec {
     }
     espc[nchunk]=x;             // Total element count in last
     // Replacement plain Vec for AppendableVec.
-    Vec vec = new Vec(_key, espc, _domain, hasUUID, (byte)t);
+    Vec vec = new Vec(_key, espc, _domain, hasUUID, hasString, (byte)t);
     DKV.put(_key,vec,fs);       // Inject the header
     return vec;
   }
 
   // Default read/write behavior for AppendableVecs
-  @Override
-  public boolean readable() { return false; }
-  @Override
-  public boolean writable() { return true ; }
-
-  @Override public Chunk chunkForChunkIdx(int cidx) { return new NewChunk(this,cidx); }
-
+  @Override public boolean readable() { return false; }
+  @Override public boolean writable() { return true ; }
+  @Override public NewChunk chunkForChunkIdx(int cidx) { return new NewChunk(this,cidx); }
   // None of these are supposed to be called while building the new vector
-  @Override
-  public Value chunkIdx( int cidx ) { throw H2O.fail(); }
-  @Override
-  public long length() { throw H2O.fail(); }
-  @Override
-  public int nChunks() { throw H2O.fail(); }
-  @Override
-  int elem2ChunkIdx( long i ) { throw H2O.fail(); }
-  @Override
-  public long chunk2StartElem( int cidx ) { throw H2O.fail(); }
-
-  @Override
-  public long byteSize() { return 0; }
+  @Override public Value chunkIdx( int cidx ) { throw H2O.fail(); }
+  @Override public long length() { throw H2O.fail(); }
+  @Override public int nChunks() { throw H2O.fail(); }
+  @Override int elem2ChunkIdx( long i ) { throw H2O.fail(); }
+  @Override public long chunk2StartElem( int cidx ) { throw H2O.fail(); }
+  @Override public long byteSize() { return 0; }
   @Override public String toString() { return "[AppendableVec, unknown size]"; }
 }

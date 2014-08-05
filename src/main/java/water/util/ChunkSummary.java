@@ -1,9 +1,9 @@
 package water.util;
 import water.H2O;
 import water.MRTask2;
-import water.PrettyPrint;
 import water.fvec.Chunk;
 import water.fvec.Vec;
+import water.util.PrettyPrint;
 
 /**
  * Simple summary of how many chunks of each type are in a Frame

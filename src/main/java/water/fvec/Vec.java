@@ -1,12 +1,13 @@
 package water.fvec;
 
+import java.util.Arrays;
+import java.util.UUID;
 import jsr166y.CountedCompleter;
 import water.*;
 import water.nbhm.NonBlockingHashMapLong;
 import water.util.Utils;
-
-import java.util.Arrays;
-import java.util.UUID;
+import water.util.PrettyPrint;
+import water.parser.ParseTime;
 
 import static water.util.Utils.seq;
 
@@ -67,6 +68,8 @@ public class Vec extends Iced {
   long _size;
   boolean _isInt;               // All ints
   boolean _isUUID;              // All UUIDs (or zero or missing)
+  /** String flag */
+  protected boolean _isString;    // All Strings
   /** The count of missing elements.... or -2 if we have active writers and no
    *  rollup info can be computed (because the vector is being rapidly
    *  modified!), or -1 if rollups have not been computed since the last
@@ -83,13 +86,14 @@ public class Vec extends Iced {
   /** Main default constructor; requires the caller understand Chunk layout
    *  already, along with count of missing elements.  */
   public Vec( Key key, long espc[]) { this(key, espc, null); }
-  public Vec( Key key, long espc[], String[] domain) { this(key,espc,domain,false,(byte)-1); }
-  public Vec( Key key, long espc[], String[] domain, boolean hasUUID, byte time) {
+  public Vec( Key key, long espc[], String[] domain) { this(key,espc,domain,false, false, (byte)-1); }
+  public Vec( Key key, long espc[], String[] domain, boolean hasUUID, boolean hasString, byte time) {
     assert key._kb[0]==Key.VEC;
     _key = key;
     _espc = espc;
     _time = time;               // is-a-time, or not (and what flavor used to parse time)
     _isUUID = hasUUID;          // all-or-nothing UUIDs
+    _isString = hasString;
     _domain = domain;
   }
 
@@ -106,6 +110,7 @@ public class Vec extends Iced {
       vs[i] = new Vec(keys[i],_espc,
                       domain == null ? null    : domain[i],
                       uuids  == null ? false   : uuids [i],
+                      false,    // No constant strings
                       times  == null ? (byte)-1: times [i]);
     new DRemoteTask(){
       @Override public void lcompute(){
@@ -414,8 +419,9 @@ public class Vec extends Iced {
   }
   /** Is the column a factor/categorical/enum?  Note: all "isEnum()" columns
    *  are are also "isInt()" but not vice-versa. */
-  public final boolean isEnum(){return _domain != null;}
+  public final boolean isEnum(){return _domain != null && !_isString;}
   public final boolean isUUID(){return _isUUID;}
+  public final boolean isString(){return _isString;}
   /** Is the column constant.
    * <p>Returns true if the column contains only constant values and it is not full of NAs.</p> */
   public final boolean isConst() { return min() == max(); }

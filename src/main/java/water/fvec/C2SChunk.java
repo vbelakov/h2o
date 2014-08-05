@@ -2,6 +2,7 @@ package water.fvec;
 
 import java.util.Arrays;
 import water.*;
+import water.util.PrettyPrint;
 
 /**
  * The scale/bias function, where data is in SIGNED bytes before scaling.

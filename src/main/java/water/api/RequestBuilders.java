@@ -4,7 +4,7 @@ import com.google.gson.*;
 import water.AutoBuffer;
 import water.H2O;
 import water.Iced;
-import water.PrettyPrint;
+import water.util.PrettyPrint;
 import water.api.Request.API;
 import water.api.RequestBuilders.Response.Status;
 import water.util.JsonUtil;

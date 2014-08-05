@@ -8,8 +8,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import water.*;
 import water.parser.CsvParser;
-import water.parser.CustomParser;
-import water.parser.GuessSetup;
+import water.parser.ParserType;
 import water.util.RString;
 
 abstract public class Parse extends Request {
@@ -116,7 +115,7 @@ abstract public class Parse extends Request {
         PSetup res = new PSetup(keys,null,setup);
         _parserType.setValue(setup._setup._pType);
         _separator.setValue(setup._setup._separator);
-        _hdrFrom._hideInQuery = _header._hideInQuery = _separator._hideInQuery = setup._setup._pType != CustomParser.ParserType.CSV;
+        _hdrFrom._hideInQuery = _header._hideInQuery = _separator._hideInQuery = setup._setup._pType != ParserType.CSV;
         Set<String> dups = setup.checkDupColumnNames();
         if(!dups.isEmpty())
           throw new IllegalArgumentException("Column labels must be unique but these labels are repeated: "  + dups.toString());
@@ -345,14 +344,14 @@ abstract public class Parse extends Request {
     }
   }
 
-  private class ParserType extends InputSelect<CustomParser.ParserType> {
+  private class ParserType extends InputSelect<ParserType> {
     public ParserType(String name) {
       super(name,false);
       setRefreshOnChange();
-      _values = new String [CustomParser.ParserType.values().length-1];
+      _values = new String [ParserType.values().length-1];
       int i = 0;
-      for(CustomParser.ParserType t:CustomParser.ParserType.values())
-        if(t != CustomParser.ParserType.XLSX)
+      for(ParserType t:ParserType.values())
+        if(t != ParserType.XLSX)
           _values[i++] = t.name();
     }
     private final String [] _values;
@@ -363,14 +362,14 @@ abstract public class Parse extends Request {
     @Override protected String[] selectNames()      {
       return _values;
     }
-    @Override protected CustomParser.ParserType defaultValue() {
-      return CustomParser.ParserType.AUTO;
+    @Override protected ParserType defaultValue() {
+      return ParserType.AUTO;
     }
-    public void setValue(CustomParser.ParserType pt){record()._value = pt;}
+    public void setValue(ParserType pt){record()._value = pt;}
     @Override protected String   selectedItemValue(){
       return value() != null ? value().toString() : defaultValue().toString(); }
-    @Override protected CustomParser.ParserType parse(String input) throws IllegalArgumentException {
-      return  CustomParser.ParserType.valueOf(input);
+    @Override protected ParserType parse(String input) throws IllegalArgumentException {
+      return  ParserType.valueOf(input);
     }
   }
 

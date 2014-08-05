@@ -483,6 +483,10 @@ public abstract class Log {
   static public RuntimeException errRTExcept(Throwable exception) {
     return new RuntimeException(err(Sys.WATER, "", exception));
   }
+  static public RuntimeException throwErr(Throwable exception) {
+    throw new RuntimeException(err(Sys.WATER, "", exception));
+  }
+
   /** Log a warning to standard out, the log file and the store. */
   static public <T extends Throwable> T warn(Sys t, String msg, T exception) {
     Event e =  Event.make(t, Kind.WARN, exception,  msg);

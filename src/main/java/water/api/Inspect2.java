@@ -13,6 +13,7 @@ import water.*;
 import water.api.Inspect2.ColSummary.ColType;
 import water.fvec.*;
 import water.util.UIUtils;
+import water.util.PrettyPrint;
 
 import java.text.DecimalFormat;
 

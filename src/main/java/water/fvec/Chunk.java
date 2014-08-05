@@ -1,6 +1,7 @@
 package water.fvec;
 
 import water.*;
+import water.util.PrettyPrint;
 
 /** A compression scheme, over a chunk - a single array of bytes.  The *actual*
  *  vector header info is in the Vec struct - which contains info to find all

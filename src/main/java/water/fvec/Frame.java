@@ -5,6 +5,7 @@ import water.*;
 import water.H2O.H2OCountedCompleter;
 import water.exec.Flow;
 import water.util.Log;
+import water.util.PrettyPrint;
 
 import java.io.IOException;
 import java.io.InputStream;

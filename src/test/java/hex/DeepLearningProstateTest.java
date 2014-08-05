@@ -12,7 +12,7 @@ import water.exec.Env;
 import water.exec.Exec2;
 import water.fvec.Frame;
 import water.fvec.NFSFileVec;
-import water.fvec.ParseDataset2;
+import water.parser.ParseDataset2;
 import water.util.Log;
 
 import java.util.Arrays;

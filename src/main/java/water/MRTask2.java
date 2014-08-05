@@ -5,6 +5,7 @@ import jsr166y.ForkJoinPool;
 import water.H2O.H2OCountedCompleter;
 import water.fvec.*;
 import water.fvec.Vec.VectorGroup;
+import water.util.PrettyPrint;
 
 /**
  * Map/Reduce style distributed computation.

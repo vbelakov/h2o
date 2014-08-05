@@ -4,7 +4,7 @@ import static hex.deeplearning.Neurons.*;
 import hex.deeplearning.Neurons.*;
 import org.junit.Ignore;
 import org.junit.Test;
-import water.PrettyPrint;
+import water.util.PrettyPrint;
 import water.util.Log;
 import water.util.Utils;
 

@@ -1,6 +1,7 @@
-package water;
+package water.util;
 
 import java.util.concurrent.TimeUnit;
+import water.util.PrettyPrint;
 
 public class PrettyPrint {
   public static String msecs(long msecs, boolean truncate) {
