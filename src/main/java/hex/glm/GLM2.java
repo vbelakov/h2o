@@ -13,6 +13,7 @@ import hex.glm.GLMTask.GLMIterationTask;
 import hex.glm.GLMTask.YMUTask;
 import hex.glm.LSMSolver.ADMMSolver;
 import jsr166y.CountedCompleter;
+import org.apache.poi.util.ArrayUtil;
 import water.*;
 import water.H2O.H2OCallback;
 import water.H2O.H2OCountedCompleter;
@@ -29,6 +30,7 @@ import water.util.Utils;
 import java.text.DecimalFormat;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -323,7 +325,10 @@ public class GLM2 extends Job.ModelJobWithoutClassificationField {
     beta_constraints = f;
     return this;
   }
-
+  public GLM2 setPrior(double p){
+    this.prior = p;
+    return this;
+  }
   static String arrayToString (double[] arr) {
     if (arr == null) {
       return "(null)";
@@ -434,16 +439,9 @@ public class GLM2 extends Job.ModelJobWithoutClassificationField {
       _glm = new GLMParams(family, tweedie_variance_power, link, tweedie_link_power);
       source2 = new Frame(source);
       assert sorted(ignored_cols);
-      if (offset != null) {
-        if (offset.isEnum())
-          throw new IllegalArgumentException("Categorical offsets are not supported. Can not use column '" + source2.names()[source2.find(offset)] + "' as offset");
-        int id = source.find(offset);
-        int idx = Arrays.binarySearch(ignored_cols, id);
-        if (idx >= 0) Utils.remove(ignored_cols, idx);
-        String name = source2.names()[id];
-//        source2.add(name, source2.remove(id));
-        _noffsets = 1;
-      }
+      source2.remove(ignored_cols);
+      if(offset != null)
+        source2.remove(source2.find(offset)); // remove offset and add it later explicitly (so that it does not interfere with DataInfo.prepareFrame)
       if (nlambdas == -1)
         nlambdas = 100;
       if (lambda_search && lambda.length > 1)
@@ -469,20 +467,17 @@ public class GLM2 extends Job.ModelJobWithoutClassificationField {
           //pass
       }
       toEnum = family == Family.binomial && (!response.isEnum() && (response.min() < 0 || response.max() > 1));
-      String offsetName = "";
-      int offsetId = -1;
-      if(offset != null) {
-        offsetId = source2.find(offset);
-        offsetName = source2.names()[offsetId];
-        source2.remove(offsetId);
-      }
-
-      Frame fr = DataInfo.prepareFrame(source2, response, ignored_cols, toEnum, true, true);
-      if(offset != null){ // now put the offset just before response
+      if(source2.numCols() <= 1 && !intercept)
+        throw new IllegalArgumentException("There are no predictors left after ignoring constant columns in the dataset and no intercept => No parameters to estimate.");
+      Frame fr = DataInfo.prepareFrame(source2, response, new int[0], toEnum, true, true);
+      if(offset != null){ // now put the offset just in front of response
+        int id = source.find(offset);
+        String name = source.names()[id];
         String responseName = fr.names()[fr.numCols()-1];
         Vec responseVec = fr.remove(fr.numCols()-1);
-        fr.add(offsetName, offset);
+        fr.add(name, offset);
         fr.add(responseName,responseVec);
+        _noffsets = 1;
       }
       TransformType dt = TransformType.NONE;
       if (standardize)
@@ -499,19 +494,27 @@ public class GLM2 extends Job.ModelJobWithoutClassificationField {
       _activeData = _srcDinfo;
       if (higher_accuracy) setHighAccuracy();
       if (beta_constraints != null) {
-        Vec v;
-        v = beta_constraints.vec("names");
+        Vec v = beta_constraints.vec("names");
+        if(v == null)
+          throw new IllegalArgumentException("Invalid beta constraints file, missing column with predictor names");
         // for now only enums allowed here
         String [] dom = v.domain();
         String [] names = Utils.append(_srcDinfo.coefNames(), "Intercept");
         int [] map = Utils.asInts(v);
+        HashSet<Integer> s = new HashSet<Integer>();
+        for(int i:map)
+          if(!s.add(i))
+            throw new IllegalArgumentException("Invalid beta constraints file, got duplicate constraints for '" + dom[i] + "'");
+
         if(!Arrays.deepEquals(dom,names)) { // need mapping
           HashMap<String,Integer> m = new HashMap<String, Integer>();
-          for(int i = 0; i < names.length; ++i)
-            m.put(names[i],i);
-          int [] newMap = MemoryManager.malloc4(dom.length);
+          for(int i = 0; i < names.length; ++i) {
+            m.put(names[i], i);
+          }
+          int [] newMap = MemoryManager.malloc4(map.length);
           for(int i = 0; i < map.length; ++i) {
             Integer I = m.get(dom[map[i]]);
+            if(I == null) throw new IllegalArgumentException("unknown predictor name '" + dom[map[i]]+"'");
             newMap[i] = I == null?-1:I;
           }
           map = newMap;
@@ -521,6 +524,7 @@ public class GLM2 extends Job.ModelJobWithoutClassificationField {
           _lbs = map == null ? Utils.asDoubles(v) : mapVec(Utils.asDoubles(v), makeAry(names.length, Double.NEGATIVE_INFINITY), map);
 //            for(int i = 0; i < _lbs.length; ++i)
 //            if(_lbs[i] > 0) throw new IllegalArgumentException("lower bounds must be non-positive");
+          System.out.println("lower bounds = " + Arrays.toString(_lbs));
           if(_srcDinfo._normMul != null) {
             for (int i = numoff; i < _srcDinfo.fullN(); ++i) {
               if (Double.isInfinite(_lbs[i])) continue;
@@ -528,6 +532,7 @@ public class GLM2 extends Job.ModelJobWithoutClassificationField {
             }
           }
         }
+        System.out.println("lbs = " + Arrays.toString(_lbs));
         if((v = beta_constraints.vec("upper_bounds")) != null) {
           _ubs = map == null ? Utils.asDoubles(v) : mapVec(Utils.asDoubles(v), makeAry(names.length, Double.POSITIVE_INFINITY), map);
           System.out.println("upper bounds = " + Arrays.toString(_ubs));
@@ -539,7 +544,7 @@ public class GLM2 extends Job.ModelJobWithoutClassificationField {
               _ubs[i] /= _srcDinfo._normMul[i - numoff];
             }
         }
-
+        System.out.println("ubs = " + Arrays.toString(_ubs));
         if(_lbs != null && _ubs != null) {
           for(int i = 0 ; i < _lbs.length; ++i)
             if(_lbs[i] > _ubs[i])
@@ -562,10 +567,16 @@ public class GLM2 extends Job.ModelJobWithoutClassificationField {
           _rho = map == null?Utils.asDoubles(v):mapVec(Utils.asDoubles(v),makeAry(names.length,0),map);
         else if(_bgs != null)
           throw new IllegalArgumentException("Missing vector of penalties (rho) in beta_constraints file.");
+        String [] cols = new String[]{"names","rho","beta_given","lower_bounds","upper_bounds"};
+        Arrays.sort(cols);
+        for(String str:beta_constraints.names())
+          if(Arrays.binarySearch(cols,str) < 0)
+            Log.warn("unknown column in beta_constraints file: '"  + str + "'");
       }
       if (non_negative) { // make srue lb is >= 0
         if (_lbs == null)
-          _lbs = new double[_srcDinfo.fullN()];
+          _lbs = new double[_srcDinfo.fullN()+1];
+        _lbs[_srcDinfo.fullN()] = Double.NEGATIVE_INFINITY; // no bounds for intercept
         for (int i = 0; i < _lbs.length; ++i)
           if (_lbs[i] < 0)
             _lbs[i] = 0;
@@ -950,7 +961,7 @@ public class GLM2 extends Job.ModelJobWithoutClassificationField {
           return;
         }
         LogInfo("invoking line search");
-        new GLMTask.GLMLineSearchTask(_noffsets, GLM2.this.self(), _activeData,_glm, lastBeta(_noffsets), glmt._beta, 1e-4, _ymu, _nobs, new LineSearchIteration(glmt,getCompleter())).asyncExec(_activeData._adaptedFrame);
+        new GLMTask.GLMLineSearchTask(_noffsets, GLM2.this.self(), _activeData,_glm, lastBeta(_noffsets), glmt._beta,  _lbs, _ubs, _ymu, _nobs, new LineSearchIteration(glmt,getCompleter())).asyncExec(_activeData._adaptedFrame);
         return;
       }
       if(glmt._grad != null)
@@ -962,7 +973,7 @@ public class GLM2 extends Job.ModelJobWithoutClassificationField {
 
       final double [] newBeta = MemoryManager.malloc8d(glmt._xy.length);
       long t1 = System.currentTimeMillis();
-      ADMMSolver slvr = new ADMMSolver(lambda_max, _currentLambda,alpha[0], _gradientEps, _addedL2);
+      ADMMSolver slvr = new ADMMSolver(lambda_max, _currentLambda,alpha[0], _gradientEps, _addedL2,_intercept == 1);
       if(_lbs != null)
         slvr._lb = _activeCols == null?contractVec(_lbs,_activeCols,0):_lbs;
       if(_ubs != null)
@@ -1381,10 +1392,14 @@ public class GLM2 extends Job.ModelJobWithoutClassificationField {
     if(_bgs != null && _rho != null) {
       for(int i = 0; i < _bgs.length; ++i){
         double diff = fullBeta[i] - _bgs[i];
-        res += .5*_rho[i]*diff*diff;
+        res += _rho[i]*diff*diff;
       }
     }
-    return res;
+//    System.out.println("beta = " + Utils.pprint(new double[][]{beta}));
+//    System.out.println("bgvn = " + Utils.pprint(new double[][]{_bgs}));
+//    System.out.println("rhos = " + Utils.pprint(new double[][]{_rho}));
+//    System.out.println("pen = " + .5*res);
+    return .5*res;
   }
 
   //  // filter the current active columns using the strong rules

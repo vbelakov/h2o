@@ -724,7 +724,7 @@ class RUnitRunner:
             print("")
             sys.exit(1)
 
-    def build_test_list(self, test_group, run_small, run_medium, run_large):
+    def build_test_list(self, test_group, run_small, run_medium, run_large, run_xlarge):
         """
         Recursively find the list of tests to run and store them in the object.
         Fills in self.tests and self.tests_not_started.
@@ -746,20 +746,17 @@ class RUnitRunner:
                 is_small = False
                 is_medium = False
                 is_large = False
+                is_xlarge= False
 
-                if (re.match(".*large.*", f)):
-                    is_large = True
-                elif (re.match(".*medium.*", f)):
-                    is_large = True
-                else:
-                    is_small = True
+                if   "xlarge" in f: is_xlarge = True
+                elif "medium" in f: is_medium = True
+                elif "large"  in f: is_large  = True
+                else:               is_small  = True
 
-                if (is_small and not run_small):
-                    continue
-                if (is_medium and not run_medium):
-                    continue
-                if (is_large and not run_large):
-                    continue
+                if is_small  and not run_small:  continue
+                if is_medium and not run_medium: continue
+                if is_large  and not run_large:  continue
+                if is_xlarge and not run_xlarge: continue
 
                 if (test_group is not None):
                     test_short_dir = self._calc_test_short_dir(os.path.join(root, f))
@@ -832,13 +829,13 @@ class RUnitRunner:
 
         self._log("")
         self._log("Setting up R H2O package...")
-        if (True):
+        if (False):
             out_file_name = os.path.join(self.output_dir, "runnerSetupPackage.out.txt")
             out = open(out_file_name, "w")
             cloud = self.clouds[0]
             port = cloud.get_port()
             ip = "127.0.0.1:"
-            if (g_use_cloud2):
+            if g_use_cloud or g_use_cloud2:
                 ip = cloud.get_ip()+":"
             cmd = ["R",
                    "--quiet",
@@ -1139,6 +1136,7 @@ g_test_group = None
 g_run_small = True
 g_run_medium = True
 g_run_large = True
+g_run_xlarge = True
 g_use_cloud = False
 g_use_cloud2 = False
 g_config = None
@@ -1301,6 +1299,7 @@ def parse_args(argv):
     global g_run_small
     global g_run_medium
     global g_run_large
+    global g_run_xlarge
     global g_use_cloud
     global g_use_cloud2
     global g_config
@@ -1360,6 +1359,8 @@ def parse_args(argv):
                     g_run_medium = False
                 if (not 'l' in v):
                     g_run_large = False
+                if not "x" in v:
+                    g_run_xlarge = False
             else:
                 bad_arg(s)
         elif (s == "--usecloud"):
@@ -1496,7 +1497,7 @@ def main(argv):
         g_runner.read_test_list_file(g_test_list_file)
     else:
         # Test group can be None or not.
-        g_runner.build_test_list(g_test_group, g_run_small, g_run_medium, g_run_large)
+        g_runner.build_test_list(g_test_group, g_run_small, g_run_medium, g_run_large, g_run_xlarge)
 
     # If no run is specified, then do an early exit here.
     if (g_no_run):
